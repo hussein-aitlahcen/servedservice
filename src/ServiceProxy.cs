@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,8 @@ namespace ServedService
 {
     public sealed class ServiceProxy
     {
+        private static ConcurrentStack<byte[]> _receiveBuffers = new ConcurrentStack<byte[]>();
+         
         private readonly Dictionary<Type, Func<string, object>> _factory;
         private readonly string _host;
         private readonly int _port;
@@ -53,11 +56,13 @@ namespace ServedService
                             stream.Flush();
                         }
                     }
-                    var bytes = new byte[2048];
+                    var bytes = new byte[1024];
                     var length = stream.Read(bytes, 0, bytes.Length) - 1;
                     var success = bytes[0] == 1;
                     if (!success)
                         throw new Exception(Encoding.Default.GetString(bytes, 1, length));
+                    if (typeof (TOut) == typeof (PlaceHolderType))
+                        return default(TOut);
                     using (var input = new MemoryStream(bytes, 1, length))
                     {
                         return ProtoBuf.Serializer.Deserialize<TOut>(input);
@@ -124,28 +129,27 @@ namespace ServedService
                 typeBuilder.DefineMethodOverride(methBuilder, method);
 
                 var outputType = method.ReturnType;
+                if (outputType == typeof (void))
+                    outputType = typeof (PlaceHolderType);
+
                 il = methBuilder.GetILGenerator();
                 {
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, serviceField);
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, nameSpaceField);
+                    il.Emit(OpCodes.Ldstr, method.Name);
                     if (method.GetParameters().Length > 0)
                     {
                         var inputType = method.GetParameters().First().ParameterType;
-                        il.Emit(OpCodes.Ldarg_0);
-                        il.Emit(OpCodes.Ldfld, serviceField);
-                        il.Emit(OpCodes.Ldarg_0);
-                        il.Emit(OpCodes.Ldfld, nameSpaceField);
-                        il.Emit(OpCodes.Ldstr, method.Name);
                         il.Emit(OpCodes.Ldarg_1);
                         il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(inputType, outputType), null);
                     }
                     else
                     {
-                        il.Emit(OpCodes.Ldarg_0);
-                        il.Emit(OpCodes.Ldfld, serviceField);
-                        il.Emit(OpCodes.Ldarg_0);
-                        il.Emit(OpCodes.Ldfld, nameSpaceField);
-                        il.Emit(OpCodes.Ldstr, method.Name);
                         il.Emit(OpCodes.Ldstr, "<EMPTY>"); // Placeholder for parameterless methods
                         il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(typeof(string), outputType), null);
+                        il.Emit(OpCodes.Pop);
                     }
                     il.Emit(OpCodes.Ret);
                 }

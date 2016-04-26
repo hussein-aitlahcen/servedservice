@@ -170,8 +170,7 @@ namespace ServedService
                 return;
             }
 
-            if(OnBytesReceived != null)
-                OnBytesReceived(args.AcceptSocket, new MemoryStream(args.Buffer, args.Segment.Offset, args.BytesTransferred));
+            OnBytesReceived?.Invoke(args.AcceptSocket, new MemoryStream(args.Buffer, args.Segment.Offset, args.BytesTransferred));
 
             args.AcceptSocket.ReceiveAsync(args);
         }

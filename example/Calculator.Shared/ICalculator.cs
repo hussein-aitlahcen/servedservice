@@ -4,10 +4,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ServedService
+namespace Calculator.Shared
 {
-    [AttributeUsage(AttributeTargets.Method)]
-    public sealed class MethodBehaviorAttribute : Attribute
+    public interface ICalculator
     {
+        int Compute(Operation operation);
     }
 }

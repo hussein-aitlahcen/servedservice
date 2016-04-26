@@ -30,6 +30,9 @@ namespace ServedService
                 _outputType = methodInfo.ReturnType;
                 _method = methodInfo;
 
+                if (_outputType == typeof (void))
+                    _outputType = typeof (PlaceHolderType);
+
                 var instanceType = instance.GetType();
                 var inputParams = methodInfo.GetParameters().ToList();
                 if (inputParams.Count > 1)
@@ -39,7 +42,7 @@ namespace ServedService
                             "Invalid parameters count on method {0}, consider using a single parameter, even if it has to be a complex type",
                             methodInfo.Name));
                 }
-
+                
                 GenerateProtoSerializer();
                 
                 if (inputParams.Count > 0)
@@ -120,7 +123,10 @@ namespace ServedService
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Castclass, _instanceType);
                     il.EmitCall(OpCodes.Callvirt, _method, null);
-                    il.EmitCall(OpCodes.Call, _protoSerializer, null);
+                    if (_outputType != typeof(PlaceHolderType))
+                        il.EmitCall(OpCodes.Call, _protoSerializer, null);
+                    else
+                        il.Emit(OpCodes.Pop);
                     il.Emit(OpCodes.Ret);
                 }
                 return wrapper;
@@ -143,7 +149,10 @@ namespace ServedService
                     il.Emit(OpCodes.Ldarg_1);
                     il.Emit(OpCodes.Castclass, _inputType);
                     il.EmitCall(OpCodes.Callvirt, _method, null);
-                    il.EmitCall(OpCodes.Call, _protoSerializer, null);
+                    if(_outputType != typeof(PlaceHolderType))
+                        il.EmitCall(OpCodes.Call, _protoSerializer, null);
+                    else
+                        il.Emit(OpCodes.Pop);
                     il.Emit(OpCodes.Ret);
                 }
                 return wrapper;
