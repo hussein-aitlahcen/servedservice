@@ -144,7 +144,7 @@ namespace ServedService
                         il.Emit(OpCodes.Ldarg_0);
                         il.Emit(OpCodes.Ldfld, nameSpaceField);
                         il.Emit(OpCodes.Ldstr, method.Name);
-                        il.Emit(OpCodes.Ldstr, "<EMPTY>");
+                        il.Emit(OpCodes.Ldstr, "<EMPTY>"); // Placeholder for parameterless methods
                         il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(typeof(string), outputType), null);
                     }
                     il.Emit(OpCodes.Ret);
@@ -152,7 +152,8 @@ namespace ServedService
 
             }
             var type = typeBuilder.CreateType();
-            _factory[contract] = (ns) => Activator.CreateInstance(type, ns, this);
+            var factory = FastActivator.GenerateDelegate(type, typeof(string), typeof(ServiceProxy));
+            _factory[contract] = (ns) => factory(new object[] {ns, this});
         }
     }
 }
