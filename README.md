@@ -1,6 +1,12 @@
 # ServedService
 Easily serve your service over network
 
+# Rules
+- The shared library must have protobuf in references
+- Service method (eg ICalculator.Compute) must have zero or only one parameter, it can be complex, but only one.
+- Complex type used as parameter or result must be tagged with ProtoContract (serialization purpose).
+- Make coffee
+
 ## Shared library
 ```C#
 public interface ICalculator
