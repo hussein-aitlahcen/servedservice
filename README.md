@@ -1,7 +1,7 @@
 # ServedService
 Easily serve your service over network
 
-# Shared library
+## Shared library
 ```C#
 public interface ICalculator
 {
@@ -27,19 +27,7 @@ public sealed class Operation
 }
 ```
 
-# Client application
-```C#
- var proxy = new ServiceProxy("127.0.0.1", 4444)
-                .GetService<ICalculator>("com.servedservice.calculator");
-  var result = proxy.Compute(new Operation()
-  {
-      Type = OperationType.Or,
-      A = 8,
-      B = 1,
-  });
-```
-
-# Server application
+## Server application
 ```C#
 public sealed class CalculatorImpl : ICalculator
 {
@@ -68,4 +56,16 @@ new Servant("127.0.0.1", 4444)
                 .Serve<ICalculator>("com.servedservice.calculator", new CalculatorImpl())
                 .Start();
 Console.ReadLine();
+```
+
+## Client application
+```C#
+ var proxy = new ServiceProxy("127.0.0.1", 4444)
+                .GetService<ICalculator>("com.servedservice.calculator");
+  var result = proxy.Compute(new Operation()
+  {
+      Type = OperationType.Or,
+      A = 8,
+      B = 1,
+  });
 ```
