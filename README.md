@@ -58,6 +58,7 @@ public sealed class CalculatorImpl : ICalculator
     }
 }
 
+// later in code
 new Servant("127.0.0.1", 4444)
                 .Serve<ICalculator>("com.servedservice.calculator", new CalculatorImpl())
                 .Start();
@@ -66,12 +67,14 @@ Console.ReadLine();
 
 ## Client application
 ```C#
- var proxy = new ServiceProxy("127.0.0.1", 4444)
-                .GetService<ICalculator>("com.servedservice.calculator");
-  var result = proxy.Compute(new Operation()
-  {
-      Type = OperationType.Or,
-      A = 8,
-      B = 1,
-  });
+// You could have multiple namespace 'com.servedservice.calculator.1, 2, 3 etc...
+// each implementing different behaviors
+var proxy = new ServiceProxy("127.0.0.1", 4444)
+            .GetService<ICalculator>("com.servedservice.calculator");
+var result = proxy.Compute(new Operation()
+{
+  Type = OperationType.Or,
+  A = 8,
+  B = 1,
+});
 ```
