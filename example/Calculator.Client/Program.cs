@@ -16,17 +16,31 @@ namespace Calculator.Client
             var service = new ServiceProxy("127.0.0.1", 4444)
                 .GetService<ICalculator>("com.servedservice.calculator");
 
-            var result = service.Compute
-            (
-                new OperationRequest
-                (
-                    OperationType.Mul,
-                    10, 
-                    5
-                )
-            );
-            
-            Console.WriteLine(result.Computed);
+            const int size = 1000;
+            var tasks = new Task<int>[size];
+            var watch = Stopwatch.StartNew();
+            var before = watch.ElapsedMilliseconds;
+            for (var i = 0; i < size; i++)
+            {
+                var current = i;
+                tasks[i] = Task.Factory.StartNew(() => 
+                    service.Compute
+                        (
+                            new OperationRequest
+                                (
+                                    OperationType.Mul,
+                                    current * 2,
+                                    current * current
+                                )
+                        ).Computed
+                );
+            }
+            Task.WhenAll(tasks).ContinueWith((task =>
+            {
+                var delta = watch.ElapsedMilliseconds - before;
+
+                Console.WriteLine(delta + "ms");
+            }));
             Console.Read();
         }
     }

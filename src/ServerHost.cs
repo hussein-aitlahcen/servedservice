@@ -5,8 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Resources;
 using System.Text;
 using System.Threading.Tasks;
+using CodeProject.ObjectPool;
 
 namespace ServedService
 {
@@ -76,6 +78,7 @@ namespace ServedService
         private string _host;
         private int _port;
         private readonly int _backlog;
+        private readonly ObjectPool<PooledObjectWrapper<SocketAsyncEventArgs>> _sendPool;
 
         public event BytesReceived OnBytesReceived;
 
@@ -84,6 +87,14 @@ namespace ServedService
             _backlog = backlog;
             _host = host;
             _port = port;
+            _sendPool = new ObjectPool<PooledObjectWrapper<SocketAsyncEventArgs>>(() =>
+            {
+                var saea = new SocketAsyncEventArgs();
+                saea.Completed += IOCompleted;
+                var pooled = new PooledObjectWrapper<SocketAsyncEventArgs>(saea);
+                saea.UserToken = pooled;
+                return pooled;
+            });
         }
         
         internal void Start()
@@ -96,9 +107,9 @@ namespace ServedService
             };
             _socket.Bind(new IPEndPoint(IPAddress.Parse(_host), _port));
             _socket.Listen(_backlog);
-            for (int i = 0; i < _backlog; i++)
+            for (var i = 0; i < _backlog; i++)
             {
-                AcceptAsync();
+                StartAccept();
             }
         }
 
@@ -116,9 +127,31 @@ namespace ServedService
             }
         }
 
-        private void AcceptAsync()
+        private void StartAccept(SocketAsyncEventArgs args = null)
         {
-            _socket.AcceptAsync(CreateEventArgs());
+            if (args == null)
+            {
+                args = new SocketAsyncEventArgs();
+                args.Completed += IOCompleted;
+            }
+            else
+            {
+                args.AcceptSocket = null;
+            }
+
+            if (!_socket.AcceptAsync(args))
+                ProcessAccepted(args);
+        }
+
+        private void StartReceive(Socket socket, WrappedSocketEvent args = null)
+        {
+            if (args == null)
+            {
+                args = CreateEventArgs();
+                args.AcceptSocket = socket;
+            }
+            if (!socket.ReceiveAsync(args))
+                ProcessReceived(args);
         }
 
         private WrappedSocketEvent CreateEventArgs()
@@ -127,14 +160,19 @@ namespace ServedService
             {
                 Segment = _bigBuffer.Acquire()
             };
+            saea.SetBuffer(_bigBuffer.Buffer, saea.Segment.Offset, saea.Segment.Count);
             saea.Completed += IOCompleted;
             return saea;
         }
 
         private void DestroyEventArgs(SocketAsyncEventArgs saea)
         {
-            saea.Completed -= IOCompleted;
             _bigBuffer.Release(((WrappedSocketEvent)saea).Segment);
+            saea.Completed -= IOCompleted;
+            saea.SetBuffer(null, 0, 0);
+            saea.AcceptSocket.Close();
+            saea.AcceptSocket.Dispose();
+            saea.Dispose();
         }
 
         private void IOCompleted(object sender, SocketAsyncEventArgs args)
@@ -142,7 +180,7 @@ namespace ServedService
             switch (args.LastOperation)
             {
                 case SocketAsyncOperation.Accept:
-                    ProcessAccepted((WrappedSocketEvent)args);
+                    ProcessAccepted(args);
                     break;
 
                 case SocketAsyncOperation.Receive:
@@ -152,14 +190,18 @@ namespace ServedService
                 case SocketAsyncOperation.Send:
                     ProcessSent(args);
                     break;
+
+                default:
+                    Console.WriteLine("unknow operation : " + args.LastOperation);
+                    break;
             }   
         }
 
-        private void ProcessAccepted(WrappedSocketEvent args)
+        private void ProcessAccepted(SocketAsyncEventArgs args)
         {
-            AcceptAsync();
-            args.SetBuffer(_bigBuffer.Buffer, args.Segment.Offset, args.Segment.Count);
-            args.AcceptSocket.ReceiveAsync(args);
+            var accepted = args.AcceptSocket;
+            StartAccept(args);
+            StartReceive(accepted);
         }
 
         private void ProcessReceived(WrappedSocketEvent args)
@@ -173,20 +215,19 @@ namespace ServedService
             if(OnBytesReceived != null)
                 OnBytesReceived(args.AcceptSocket, new MemoryStream(args.Buffer, args.Segment.Offset, args.BytesTransferred));
 
-            args.AcceptSocket.ReceiveAsync(args);
+            StartReceive(args.AcceptSocket, args);
         }
 
         private void ProcessSent(SocketAsyncEventArgs args)
         {
-            args.Completed -= IOCompleted;
             args.SetBuffer(null, 0, 0);
+            ((PooledObjectWrapper<SocketAsyncEventArgs>) args.UserToken).Dispose();
         }
 
         internal void Send(Socket socket, byte[] data)
         {
-            var saea = new SocketAsyncEventArgs();
+            var saea = _sendPool.GetObject().InternalResource;
             saea.SetBuffer(data, 0, data.Length);
-            saea.Completed += IOCompleted;
             socket.SendAsync(saea);
         }
     }

@@ -63,7 +63,7 @@ namespace ServedService
             return this;
         }
 
-        public void CallMethod(string nameSpace, string method, Stream input, Stream output)
+        private void CallMethod(string nameSpace, string method, Stream input, Stream output)
         {
             if(!_classByNamespace.ContainsKey(nameSpace))
                 throw new Exception("Unknow namespace " + nameSpace);

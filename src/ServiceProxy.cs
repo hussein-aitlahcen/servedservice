@@ -11,12 +11,34 @@ using System.Runtime.Remoting;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CodeProject.ObjectPool;
 
 namespace ServedService
 {
     public sealed class ServiceProxy
     {
-        private static ConcurrentStack<byte[]> _receiveBuffers = new ConcurrentStack<byte[]>();
+        private sealed class PooledBuffer : PooledObject
+        {
+            internal byte[] Buffer { get; private set; }
+
+            public PooledBuffer(int size)
+            {
+                Buffer = new byte[size];
+            }
+        }
+
+        private const int MinPoolSize = 10;
+        private const int MaxPoolSize = 1000;
+        private const int ReceiveBufferSize = 1024;
+
+        private static readonly ObjectPool<PooledBuffer> CachedBuffers = new ObjectPool<PooledBuffer>(MinPoolSize,
+            MaxPoolSize, () => new PooledBuffer(ReceiveBufferSize))
+        {
+            Diagnostics = new ObjectPoolDiagnostics()
+            {
+                Enabled = true,
+            }
+        };
          
         private readonly Dictionary<Type, Func<string, object>> _factory;
         private readonly string _host;
@@ -56,16 +78,19 @@ namespace ServedService
                             stream.Flush();
                         }
                     }
-                    var bytes = new byte[1024];
-                    var length = stream.Read(bytes, 0, bytes.Length) - 1;
-                    var success = bytes[0] == 1;
-                    if (!success)
-                        throw new Exception(Encoding.Default.GetString(bytes, 1, length));
-                    if (typeof (TOut) == typeof (PlaceHolderType))
-                        return default(TOut);
-                    using (var input = new MemoryStream(bytes, 1, length))
+                    using (var pooledBuffer = CachedBuffers.GetObject())
                     {
-                        return ProtoBuf.Serializer.Deserialize<TOut>(input);
+                        var bytes = pooledBuffer.Buffer;
+                        var length = stream.Read(bytes, 0, bytes.Length) - 1;
+                        var success = bytes[0] == 1;
+                        if (!success)
+                            throw new Exception(Encoding.Default.GetString(bytes, 1, length));
+                        if (typeof(TOut) == typeof(PlaceHolderType))
+                            return default(TOut);
+                        using (var input = new MemoryStream(bytes, 1, length))
+                        {
+                            return ProtoBuf.Serializer.Deserialize<TOut>(input);
+                        }
                     }
                 }
             }
