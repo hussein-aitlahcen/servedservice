@@ -8,6 +8,6 @@ namespace Calculator.Shared
 {
     public interface ICalculator
     {
-        int Compute(Operation operation);
+        OperationResult Compute(OperationRequest request);
     }
 }

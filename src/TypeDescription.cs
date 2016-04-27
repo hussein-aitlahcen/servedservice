@@ -15,13 +15,15 @@ namespace ServedService
     {
         internal sealed class MethodDescription
         {
+            private delegate void MethodProxy(Stream input, Stream output);
+
             private readonly object _instance;
             private readonly Type _inputType;
             private readonly Type _instanceType;
             private readonly Type _outputType;
             private readonly MethodInfo _method;
-            private DynamicMethod _protoSerializer;
-            private Action<Stream, Stream> _deserializer; 
+            private readonly DynamicMethod _protoSerializer;
+            private readonly MethodProxy _methodProxy; 
 
             public MethodDescription(object instance, MethodInfo methodInfo)
             {
@@ -43,20 +45,20 @@ namespace ServedService
                             methodInfo.Name));
                 }
                 
-                GenerateProtoSerializer();
+                _protoSerializer = GenerateProtoSerializer();
                 
                 if (inputParams.Count > 0)
                 {
                     _inputType = inputParams.First().ParameterType;
-                    GenerateParameteredMethod();
+                    _methodProxy = GenerateParameteredMethod();
                 }
                 else
                 {
-                    GenerateParameterlessMethod();
+                    _methodProxy = GenerateParameterlessMethod();
                 }
             }
 
-            private void GenerateParameteredMethod()
+            private MethodProxy GenerateParameteredMethod()
             {
                 var wrapper = GenerateParameteredWrapper();
                 var protoExtractor = GenerateProtoExtractor();
@@ -64,26 +66,26 @@ namespace ServedService
                 var paramFactory = (Func<Stream, object>)protoExtractor.CreateDelegate(typeof(Func<Stream, object>));
                 var wrapperDelegate = (Action<object, object, Stream>)wrapper.CreateDelegate(typeof(Action<object, object, Stream>));
 
-                _deserializer = (input, output) =>
+                return (input, output) =>
                 {
                     wrapperDelegate(_instance, paramFactory(input), output);
                 };
             }
 
-            private void GenerateParameterlessMethod()
+            private MethodProxy GenerateParameterlessMethod()
             {
                 var wrapper = GenerateParameterlessWrapper();
                 var wrapperDelegate = (Action<object, Stream>)wrapper.CreateDelegate(typeof(Action<object, Stream>));
 
-                _deserializer = (input, output) => 
+                return (input, output) => 
                 {
                     wrapperDelegate(_instance, output);
                 };
             }
 
-            private void GenerateProtoSerializer()
+            private DynamicMethod GenerateProtoSerializer()
             {
-                _protoSerializer = new DynamicMethod("ProtoSerializer_" + _outputType.Name, typeof(void), new[] { typeof(Stream), _outputType });
+                var protoSerializer = new DynamicMethod("ProtoSerializer_" + _outputType.Name, typeof(void), new[] { typeof(Stream), _outputType });
                 var protoSerializeMethod = typeof(ProtoBuf.Serializer)
                     .GetMethods()
                     .Where(method => method.Name == "Serialize")
@@ -92,13 +94,14 @@ namespace ServedService
                             method.GetParameters().Any(param => param.ParameterType == typeof(Stream)) &&
                             method.GetGenericArguments().Length > 0);
 
-                var il = _protoSerializer.GetILGenerator();
+                var il = protoSerializer.GetILGenerator();
                 {
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldarg_1);
                     il.EmitCall(OpCodes.Call, protoSerializeMethod.MakeGenericMethod(_outputType), null);
                     il.Emit(OpCodes.Ret);
                 }
+                return protoSerializer;
             }
 
             private DynamicMethod GenerateProtoExtractor()
@@ -160,7 +163,7 @@ namespace ServedService
 
             public void Execute(Stream input, Stream output)
             {
-                _deserializer(input, output);
+                _methodProxy(input, output);
             }
         }
 

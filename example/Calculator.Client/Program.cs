@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,14 +13,21 @@ namespace Calculator.Client
     {
         static void Main(string[] args)
         {
-            var proxy = new ServiceProxy("127.0.0.1", 4444)
+            var service = new ServiceProxy("127.0.0.1", 4444)
                 .GetService<ICalculator>("com.servedservice.calculator");
-            var result = proxy.Compute(new Operation()
-            {
-                Type = OperationType.Or,
-                A = 8,
-                B = 1,
-            });
+
+            var result = service.Compute
+            (
+                new OperationRequest
+                (
+                    OperationType.Mul,
+                    10, 
+                    5
+                )
+            );
+            
+            Console.WriteLine(result.Computed);
+            Console.Read();
         }
     }
 }

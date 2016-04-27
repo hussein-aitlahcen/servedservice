@@ -9,24 +9,24 @@ namespace Calculator.Service
 {
     public sealed class CalculatorImpl : ICalculator
     {
-        public int Compute(Operation operation)
+        public OperationResult Compute(OperationRequest request)
         {
-            switch (operation.Type)
+            switch (request.Type)
             {
                 case OperationType.Add:
-                    return operation.A + operation.B;
+                    return new OperationResult(request.A + request.B);
                 case OperationType.Sub:
-                    return operation.A - operation.B;
+                    return new OperationResult(request.A - request.B);
                 case OperationType.Mul:
-                    return operation.A*operation.B;
+                    return new OperationResult(request.A*request.B);
                 case OperationType.And:
-                    return operation.A & operation.B;
+                    return new OperationResult(request.A & request.B);
                 case OperationType.Or:
-                    return operation.A | operation.B;
+                    return new OperationResult(request.A | request.B);
                 case OperationType.Xor:
-                    return operation.A ^ operation.B;
+                    return new OperationResult(request.A ^ request.B);
             }
-            throw new InvalidOperationException("Unknow operation type " + operation.Type);
+            throw new InvalidOperationException("Unknow operation type " + request.Type);
         }
     }
 }
