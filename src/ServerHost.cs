@@ -226,9 +226,10 @@ namespace ServedService
 
         internal void Send(Socket socket, byte[] data)
         {
-            var saea = _sendPool.GetObject().InternalResource;
-            saea.SetBuffer(data, 0, data.Length);
-            socket.SendAsync(saea);
+            var args = _sendPool.GetObject().InternalResource;
+            args.SetBuffer(data, 0, data.Length);
+            if (!socket.SendAsync(args))
+                ProcessSent(args);
         }
     }
 }

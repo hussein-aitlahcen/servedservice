@@ -58,10 +58,7 @@ namespace ServedService
 
         public TOut CallMethod<TIn, TOut>(string nameSpace, string method, TIn param)
         {
-            using (var client = new TcpClient()
-            {
-                NoDelay = true
-            })
+            using (var client = new TcpClient())
             {
                 client.Connect(_host, _port);
                 using (var stream = client.GetStream())
