@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime;
 using System.Runtime.Remoting.Lifetime;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,7 +19,7 @@ namespace ServedService
             private delegate void MethodProxy(Stream input, Stream output);
 
             private readonly object _instance;
-            private readonly Type _inputType;
+            private readonly Type[] _inputTypes;
             private readonly Type _instanceType;
             private readonly Type _outputType;
             private readonly MethodInfo _method;
@@ -37,19 +38,12 @@ namespace ServedService
 
                 var instanceType = instance.GetType();
                 var inputParams = methodInfo.GetParameters().ToList();
-                if (inputParams.Count > 1)
-                {
-                    throw new InvalidOperationException(
-                        string.Format(
-                            "Invalid parameters count on method {0}, consider using a single parameter, even if it has to be a complex type",
-                            methodInfo.Name));
-                }
-                
+
                 _protoSerializer = GenerateProtoSerializer();
                 
                 if (inputParams.Count > 0)
                 {
-                    _inputType = inputParams.First().ParameterType;
+                    _inputTypes = inputParams.Select(param => param.ParameterType).ToArray();
                     _methodProxy = GenerateParameteredMethod();
                 }
                 else
@@ -61,25 +55,19 @@ namespace ServedService
             private MethodProxy GenerateParameteredMethod()
             {
                 var wrapper = GenerateParameteredWrapper();
-                var protoExtractor = GenerateProtoExtractor();
-
-                var paramFactory = (Func<Stream, object>)protoExtractor.CreateDelegate(typeof(Func<Stream, object>));
-                var wrapperDelegate = (Action<object, object, Stream>)wrapper.CreateDelegate(typeof(Action<object, object, Stream>));
-
+                var paramFactory = GenerateProtoExtractor();
                 return (input, output) =>
                 {
-                    wrapperDelegate(_instance, paramFactory(input), output);
+                    wrapper(_instance, paramFactory(input), output);
                 };
             }
 
             private MethodProxy GenerateParameterlessMethod()
             {
                 var wrapper = GenerateParameterlessWrapper();
-                var wrapperDelegate = (Action<object, Stream>)wrapper.CreateDelegate(typeof(Action<object, Stream>));
-
                 return (input, output) => 
                 {
-                    wrapperDelegate(_instance, output);
+                    wrapper(_instance, output);
                 };
             }
 
@@ -104,20 +92,32 @@ namespace ServedService
                 return protoSerializer;
             }
 
-            private DynamicMethod GenerateProtoExtractor()
+            private Func<Stream, object[]> GenerateProtoExtractor()
             {
-                var protoExtractor = new DynamicMethod("ProtoExtract_" + _inputType.Name, _inputType, new[] { typeof(Stream) });
+                var protoExtractor = new DynamicMethod("ProtoExtract_" + _method.Name, typeof(object[]), new[] { typeof(Stream) });
                 var protoDeserializeMethod = typeof(ProtoBuf.Serializer).GetMethod("Deserialize");
                 var il = protoExtractor.GetILGenerator();
                 {
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.EmitCall(OpCodes.Call, protoDeserializeMethod.MakeGenericMethod(_inputType), null);
+                    var localArray = il.DeclareLocal(typeof(object[]));
+                    il.Emit(OpCodes.Ldc_I4, _inputTypes.Length);
+                    il.Emit(OpCodes.Newarr, typeof(object));
+                    il.Emit(OpCodes.Stloc, localArray);
+                    for (var i = 0; i < _inputTypes.Length; i++)
+                    {
+                        var currentParamType = _inputTypes[i];
+                        il.Emit(OpCodes.Ldloc, localArray);
+                        il.Emit(OpCodes.Ldc_I4, i);
+                        il.Emit(OpCodes.Ldarg_0);
+                        il.EmitCall(OpCodes.Call, protoDeserializeMethod.MakeGenericMethod(currentParamType), null);
+                        il.Emit(OpCodes.Stelem_Ref);
+                    }
+                    il.Emit(OpCodes.Ldloc, localArray);
                     il.Emit(OpCodes.Ret);
                 }
-                return protoExtractor;
+                return (Func<Stream, object[]>)protoExtractor.CreateDelegate(typeof(Func<Stream, object[]>));
             }
 
-            private DynamicMethod GenerateParameterlessWrapper()
+            private Action<object, Stream> GenerateParameterlessWrapper()
             {
                 var wrapper = new DynamicMethod(_method.Name, typeof(void), new[] { typeof(object), typeof(Stream) });
                 var il = wrapper.GetILGenerator();
@@ -132,25 +132,34 @@ namespace ServedService
                         il.Emit(OpCodes.Pop);
                     il.Emit(OpCodes.Ret);
                 }
-                return wrapper;
+                return (Action<object, Stream>)wrapper.CreateDelegate(typeof(Action<object, Stream>));
             }
 
-            private DynamicMethod GenerateParameteredWrapper()
+            private Action<object, object[], Stream> GenerateParameteredWrapper()
             {
-                var wrapper = new DynamicMethod(_method.Name, typeof(void), new[] { typeof(object), typeof(object), typeof(Stream) });
+                var wrapper = new DynamicMethod(_method.Name, typeof(void), new[] { typeof(object), typeof(object[]), typeof(Stream) });
                 var il = wrapper.GetILGenerator();
                 {
                     /*
-                     * void wrapper(object instance, object param, Stream output) {
-                     *      var result = ((InstanceType)instance).Method((ParamType)param)
+                     * void wrapper(object instance, object param1, object param2, object param3, Stream output) {
+                     *      var result = ((InstanceType)instance).Method((ParamType1)param, (ParamType2)param2, (ParamType3)param3);
                      *      Protobuf.Serializer.Serialize(output, result);
                      * }
                      */
+                    // output
                     il.Emit(OpCodes.Ldarg_2);
+                    // instance
                     il.Emit(OpCodes.Ldarg_0);
+                    // (instanceType)instance
                     il.Emit(OpCodes.Castclass, _instanceType);
-                    il.Emit(OpCodes.Ldarg_1);
-                    il.Emit(OpCodes.Castclass, _inputType);
+                    for (var i = 0; i < _inputTypes.Length; i++)
+                    {
+                        var currentParamType = _inputTypes[i];
+                        il.Emit(OpCodes.Ldarg_1);
+                        il.Emit(OpCodes.Ldc_I4, i);
+                        il.Emit(OpCodes.Ldelem_Ref);
+                        il.Emit(OpCodes.Castclass, currentParamType);
+                    }
                     il.EmitCall(OpCodes.Callvirt, _method, null);
                     if(_outputType != typeof(PlaceHolderType))
                         il.EmitCall(OpCodes.Call, _protoSerializer, null);
@@ -158,7 +167,7 @@ namespace ServedService
                         il.Emit(OpCodes.Pop);
                     il.Emit(OpCodes.Ret);
                 }
-                return wrapper;
+                return (Action<object, object[], Stream>)wrapper.CreateDelegate(typeof(Action<object, object[], Stream>));
             }
 
             public void Execute(Stream input, Stream output)
@@ -167,7 +176,7 @@ namespace ServedService
             }
         }
 
-        private Dictionary<string, MethodDescription> _methods; 
+        private readonly Dictionary<string, MethodDescription> _methods; 
 
         public TypeDescription(object instance)
         {

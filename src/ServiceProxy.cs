@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Runtime.Remoting;
 using System.Text;
@@ -150,6 +151,8 @@ namespace ServedService
                     method.GetParameters().Select(param => param.ParameterType).ToArray());
                 typeBuilder.DefineMethodOverride(methBuilder, method);
 
+                var methodParams = method.GetParameters().ToArray();
+
                 var outputType = method.ReturnType;
                 if (outputType == typeof (void))
                     outputType = typeof (PlaceHolderType);
@@ -161,11 +164,17 @@ namespace ServedService
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, nameSpaceField);
                     il.Emit(OpCodes.Ldstr, method.Name);
-                    if (method.GetParameters().Length > 0)
+                    if (methodParams.Length > 0)
                     {
-                        var inputType = method.GetParameters().First().ParameterType;
-                        il.Emit(OpCodes.Ldarg_1);
-                        il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(inputType, outputType), null);
+                        for (var i = 0; i < methodParams.Length; i++)
+                        {
+                            switch (i)
+                            {
+                                
+                            }
+                            il.Emit(OpCodes.Ldarg_1);
+                            il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(inputType, outputType), null);
+                        }
                     }
                     else
                     {
