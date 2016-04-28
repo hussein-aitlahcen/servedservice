@@ -17,11 +17,14 @@ namespace Calculator.Shared
         And
     }
 
-    [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
+    [ProtoContract]
     public sealed class OperationRequest
     {
+        [ProtoMember(1)]
         public OperationType Type { get; set; }
+        [ProtoMember(2)]
         public int A { get; set; }
+        [ProtoMember(3)]
         public int B { get; set; }
 
         public OperationRequest() { }
@@ -34,9 +37,10 @@ namespace Calculator.Shared
         }
     }
 
-    [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
+    [ProtoContract]
     public sealed class OperationResult
     {
+        [ProtoMember(1)]
         public int Computed { get; set; }
 
         public OperationResult() { }

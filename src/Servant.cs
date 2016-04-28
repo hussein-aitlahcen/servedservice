@@ -21,22 +21,21 @@ namespace ServedService
             _host.OnBytesReceived += ServeRequest;
         }
 
-        private void ServeRequest(Socket socket, Stream stream)
+        private void ServeRequest(Socket socket, Stream input)
         {
-            using (var reader = new BinaryReader(stream))
+            using (var reader = new BinaryReader(input))
             {
                 reader.BaseStream.Position = 0;
 
                 var nameSpace = reader.ReadString();
                 var method = reader.ReadString();
-
                 using (var output = new MemoryStream())
                 {
                     // success byte
                     output.Write(new byte[1] { 1 }, 0, 1);
                     try
                     {
-                        CallMethod(nameSpace, method, stream, output);
+                        CallMethod(nameSpace, method, input, output);
                     }
                     catch (Exception e)
                     {

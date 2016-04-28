@@ -28,5 +28,10 @@ namespace Calculator.Service
             }
             throw new InvalidOperationException("Unknow operation type " + request.Type);
         }
+
+        public string Test(int a, int b, int c, OperationRequest x)
+        { 
+            return a + "-" + b  +"-" + c;
+        }
     }
 }

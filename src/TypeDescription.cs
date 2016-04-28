@@ -1,4 +1,5 @@
 ﻿using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -12,9 +13,9 @@ using System.Threading.Tasks;
 
 namespace ServedService
 {
-    internal sealed class TypeDescription
+    public sealed class TypeDescription
     {
-        internal sealed class MethodDescription
+        public sealed class MethodDescription
         {
             private delegate void MethodProxy(Stream input, Stream output);
 
@@ -58,7 +59,8 @@ namespace ServedService
                 var paramFactory = GenerateProtoExtractor();
                 return (input, output) =>
                 {
-                    wrapper(_instance, paramFactory(input), output);
+                    var parameters = paramFactory(input);
+                    wrapper(_instance, parameters, output);
                 };
             }
 
@@ -92,16 +94,26 @@ namespace ServedService
                 return protoSerializer;
             }
 
+            public static TParam DeserializeParam<TParam>(Stream input)
+            {
+                var reader = new BinaryReader(input);
+                var length = reader.ReadInt32();
+                var serializedParam = reader.ReadBytes(length);
+                using (var paramStream = new MemoryStream(serializedParam))
+                    return ProtoBuf.Serializer.Deserialize<TParam>(paramStream);
+            }
+
             private Func<Stream, object[]> GenerateProtoExtractor()
             {
                 var protoExtractor = new DynamicMethod("ProtoExtract_" + _method.Name, typeof(object[]), new[] { typeof(Stream) });
-                var protoDeserializeMethod = typeof(ProtoBuf.Serializer).GetMethod("Deserialize");
+                var protoDeserializeMethod = GetType().GetMethods(BindingFlags.Static | BindingFlags.Public).First(method => method.Name == "DeserializeParam");
                 var il = protoExtractor.GetILGenerator();
                 {
                     var localArray = il.DeclareLocal(typeof(object[]));
                     il.Emit(OpCodes.Ldc_I4, _inputTypes.Length);
                     il.Emit(OpCodes.Newarr, typeof(object));
                     il.Emit(OpCodes.Stloc, localArray);
+
                     for (var i = 0; i < _inputTypes.Length; i++)
                     {
                         var currentParamType = _inputTypes[i];
@@ -109,6 +121,10 @@ namespace ServedService
                         il.Emit(OpCodes.Ldc_I4, i);
                         il.Emit(OpCodes.Ldarg_0);
                         il.EmitCall(OpCodes.Call, protoDeserializeMethod.MakeGenericMethod(currentParamType), null);
+                        if (currentParamType.IsValueType)
+                        {
+                            il.Emit(OpCodes.Box, currentParamType);
+                        }
                         il.Emit(OpCodes.Stelem_Ref);
                     }
                     il.Emit(OpCodes.Ldloc, localArray);
@@ -158,7 +174,10 @@ namespace ServedService
                         il.Emit(OpCodes.Ldarg_1);
                         il.Emit(OpCodes.Ldc_I4, i);
                         il.Emit(OpCodes.Ldelem_Ref);
-                        il.Emit(OpCodes.Castclass, currentParamType);
+                        if (currentParamType.IsValueType)
+                            il.Emit(OpCodes.Unbox_Any, currentParamType);
+                        else
+                            il.Emit(OpCodes.Castclass, currentParamType);
                     }
                     il.EmitCall(OpCodes.Callvirt, _method, null);
                     if(_outputType != typeof(PlaceHolderType))

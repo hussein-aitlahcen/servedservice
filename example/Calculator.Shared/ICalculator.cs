@@ -9,5 +9,6 @@ namespace Calculator.Shared
     public interface ICalculator
     {
         OperationResult Compute(OperationRequest request);
+        string Test(int a, int b, int c, OperationRequest x);
     }
 }

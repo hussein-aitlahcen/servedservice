@@ -57,7 +57,19 @@ namespace ServedService
             return Generate<T>(nameSpace);
         }
 
-        public TOut CallMethod<TIn, TOut>(string nameSpace, string method, TIn param)
+        public static void SerializeParam<TParam>(MemoryStream serializedParams, TParam param)
+        {
+            var writer = new BinaryWriter(serializedParams);
+            var lastPosition = serializedParams.Position;
+            writer.Write(0); // length placeholder
+            ProtoBuf.Serializer.Serialize(serializedParams, param);
+            var length = (int)(serializedParams.Position - lastPosition - 4);
+            serializedParams.Position = lastPosition;
+            writer.Write(length);
+            serializedParams.Position = serializedParams.Length;
+        }
+
+        public TOut CallMethod<TOut>(string nameSpace, string method, MemoryStream serializedParams)
         {
             using (var client = new TcpClient())
             {
@@ -70,11 +82,11 @@ namespace ServedService
                         {
                             output.Write(nameSpace);
                             output.Write(method);
-                            if(param != null)
-                                ProtoBuf.Serializer.Serialize(burst, param);
+                            output.Write(serializedParams.ToArray());
                             stream.Write(burst.ToArray(), 0, (int) burst.Position);
                             stream.Flush();
                         }
+                        serializedParams.Dispose();
                     }
                     using (var pooledBuffer = CachedBuffers.GetObject())
                     {
@@ -142,8 +154,15 @@ namespace ServedService
             }
 
             var callMethod = GetType().GetMethod("CallMethod");
+
+            var serializeParamMethod = GetType().GetMethod("SerializeParam");
+
+            var streamType = typeof(MemoryStream);
+
             foreach (var method in contract.GetMethods())
             {
+                var methodParams = method.GetParameters().ToArray();
+
                 var methBuilder = typeBuilder.DefineMethod(
                     method.Name,
                     MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual | MethodAttributes.Final, 
@@ -151,7 +170,6 @@ namespace ServedService
                     method.GetParameters().Select(param => param.ParameterType).ToArray());
                 typeBuilder.DefineMethodOverride(methBuilder, method);
 
-                var methodParams = method.GetParameters().ToArray();
 
                 var outputType = method.ReturnType;
                 if (outputType == typeof (void))
@@ -159,27 +177,47 @@ namespace ServedService
 
                 il = methBuilder.GetILGenerator();
                 {
+                    var localStream = il.DeclareLocal(streamType);
+
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, serviceField);
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, nameSpaceField);
                     il.Emit(OpCodes.Ldstr, method.Name);
+                    
+
+                    il.Emit(OpCodes.Newobj, streamType.GetConstructor(Type.EmptyTypes));
+                    il.Emit(OpCodes.Stloc, localStream);
+                    il.Emit(OpCodes.Ldloc, localStream);
+
                     if (methodParams.Length > 0)
                     {
                         for (var i = 0; i < methodParams.Length; i++)
                         {
+                            var currentParam = methodParams[i];
+                            il.Emit(OpCodes.Ldloc, localStream);
                             switch (i)
                             {
-                                
+                                case 0:
+                                    il.Emit(OpCodes.Ldarg_1);
+                                    break;
+                                case 1:
+                                    il.Emit(OpCodes.Ldarg_2);
+                                    break;
+                                case 2:
+                                    il.Emit(OpCodes.Ldarg_3);
+                                    break;
+                                default:
+                                    il.Emit(OpCodes.Ldarg, i + 1);
+                                    break;
                             }
-                            il.Emit(OpCodes.Ldarg_1);
-                            il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(inputType, outputType), null);
+                            il.EmitCall(OpCodes.Call, serializeParamMethod.MakeGenericMethod(currentParam.ParameterType), null);
                         }
+                        il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(outputType), null);
                     }
                     else
                     {
-                        il.Emit(OpCodes.Ldstr, "<EMPTY>"); // Placeholder for parameterless methods
-                        il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(typeof(string), outputType), null);
+                        il.EmitCall(OpCodes.Callvirt, callMethod.MakeGenericMethod(outputType), null);
                         il.Emit(OpCodes.Pop);
                     }
                     il.Emit(OpCodes.Ret);
