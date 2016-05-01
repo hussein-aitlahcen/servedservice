@@ -3,7 +3,6 @@ Easily serve your service over network
 
 # Rules
 - The shared library must have protobuf in references
-- Service method (eg ICalculator.Compute) must have zero or only one parameter, it can be complex, but only one.
 - Complex type used as parameter or result must be tagged with ProtoContract (serialization purpose).
 - Make coffee
 
@@ -12,6 +11,7 @@ Easily serve your service over network
 public interface ICalculator
 {
     int Compute(Operation operation);
+    string What();
 }
 
 public enum OperationType
@@ -56,11 +56,16 @@ public sealed class CalculatorImpl : ICalculator
         }
         throw new InvalidOperationException("Unknow operation type " + operation.Type);
     }
+    
+    public string What() 
+    {
+        return "Bitch, i'm fabulous";
+    }
 }
 
 // later in code
-new Servant("127.0.0.1", 4444)
-                .Serve<ICalculator>("com.servedservice.calculator", new CalculatorImpl())
+new ServiceRegistry("127.0.0.1", 4444)
+                .Register<ICalculator>("com.servedservice.calculator", new CalculatorImpl())
                 .Start();
 Console.ReadLine();
 ```
@@ -69,7 +74,7 @@ Console.ReadLine();
 ```C#
 // You could have multiple namespace 'com.servedservice.calculator.1, 2, 3 etc...
 // each implementing different behaviors
-var proxy = new ServiceProxy("127.0.0.1", 4444)
+var proxy = new ServiceClient("127.0.0.1", 4444)
             .GetService<ICalculator>("com.servedservice.calculator");
 var result = proxy.Compute(new Operation()
 {
