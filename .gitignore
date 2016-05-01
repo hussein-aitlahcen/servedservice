@@ -11,6 +11,8 @@
 *.userprefs
 
 *.DotSettings
+*.user
+
 
 # Build results
 [Dd]ebug/

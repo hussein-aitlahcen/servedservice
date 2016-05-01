@@ -154,9 +154,9 @@ namespace ServedService
         /// <param name="returnType"></param>
         /// <param name="paramTypes"></param>
         /// <returns></returns>
-        public static DynamicCreationDelegate GenerateDelegate(Type returnType, params Type[] paramTypes)
+        public static T GenerateDelegate<T>(Type returnType, params Type[] paramTypes)
         {
-            return GenerateDelegate(false, returnType, paramTypes);
+            return GenerateDelegate<T>(false, returnType, paramTypes);
         }
 
         /// <summary>
@@ -166,7 +166,7 @@ namespace ServedService
         /// <param name="returnType"></param>
         /// <param name="paramTypes"></param>
         /// <returns></returns>
-        public static DynamicCreationDelegate GenerateDelegate(bool restrictedSkipVisibility, Type returnType, params Type[] paramTypes)
+        public static T GenerateDelegate<T>(bool restrictedSkipVisibility, Type returnType, params Type[] paramTypes)
         {
             var constructor = returnType.GetConstructor(paramTypes);
             if (constructor == null)
@@ -176,8 +176,8 @@ namespace ServedService
                                                                   string.Join(",", from param in paramTypes
                                                                                    select param.FullName)));
 
-            var creator = MakeCreationMethodBoxed(restrictedSkipVisibility, returnType, paramTypes);
-            return (DynamicCreationDelegate)creator.CreateDelegate(typeof(DynamicCreationDelegate));
+            var creator = MakeCreationMethodTypeSafe(restrictedSkipVisibility, returnType, paramTypes);
+            return (T)(object)creator.CreateDelegate(typeof(T));
         }
 
         /// <summary>

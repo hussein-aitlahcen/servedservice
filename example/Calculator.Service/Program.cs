@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Calculator.Shared;
 using ServedService;
+using ServedService.Service;
 
 namespace Calculator.Service
 {
@@ -12,8 +13,8 @@ namespace Calculator.Service
     {
         static void Main(string[] args)
         {
-            new Servant("127.0.0.1", 4444)
-                .Serve<ICalculator>("com.servedservice.calculator", new CalculatorImpl())
+            new ServiceRegistry("127.0.0.1", 4444)
+                .Register<ICalculator>("com.servedservice.calculator", new CalculatorImpl())
                 .Start();
             Console.ReadLine();
         }

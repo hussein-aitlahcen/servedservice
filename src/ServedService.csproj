@@ -61,19 +61,20 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Client\ServiceClient.cs" />
+    <Compile Include="Service\ClassProxy.cs" />
     <Compile Include="FastActivator.cs" />
-    <Compile Include="NamespaceDictionary.cs" />
     <Compile Include="PlaceHolderType.cs" />
-    <Compile Include="Servant.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ServerHost.cs" />
-    <Compile Include="ServiceProxy.cs" />
-    <Compile Include="TypeDescription.cs" />
+    <Compile Include="Service\MethodProxy.cs" />
+    <Compile Include="Service\NetworkHost.cs" />
+    <Compile Include="Service\ServiceRegistry.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

@@ -10,12 +10,12 @@ using System.Text;
 using System.Threading.Tasks;
 using CodeProject.ObjectPool;
 
-namespace ServedService
+namespace ServedService.Service
 {
-    internal sealed class BigBuffer : IDisposable
+    public sealed class BigBuffer : IDisposable
     {
         public byte[] Buffer { get; private set; }
-        private ConcurrentStack<BufferSegment> _segments; 
+        private ConcurrentStack<BufferSegment> _segments;
 
         public BigBuffer(int segmentSize, int segmentCount)
         {
@@ -48,7 +48,7 @@ namespace ServedService
         }
     }
 
-    internal sealed class BufferSegment
+    public sealed class BufferSegment
     {
         public int Offset { get; private set; }
         public int Count { get; private set; }
@@ -60,18 +60,18 @@ namespace ServedService
         }
     }
 
-    internal sealed class WrappedSocketEvent : SocketAsyncEventArgs
+    public sealed class WrappedSocketEvent : SocketAsyncEventArgs
     {
         public BufferSegment Segment { get; set; }
     }
 
-    internal sealed class ServerHost
+    public sealed class NetworkHost
     {
         private const int BufferSegmentSize = 1024;
         private const int MaxBufferSegment = 1000;
         private const int DefaultBacklog = 100;
 
-        internal delegate void BytesReceived(Socket socket, Stream stream);
+        public delegate void BytesReceived(Socket socket, Stream stream);
 
         private BigBuffer _bigBuffer;
         private Socket _socket;
@@ -82,7 +82,7 @@ namespace ServedService
 
         public event BytesReceived OnBytesReceived;
 
-        internal ServerHost(string host, int port, int backlog = DefaultBacklog)
+        internal NetworkHost(string host, int port, int backlog = DefaultBacklog)
         {
             _backlog = backlog;
             _host = host;
@@ -96,7 +96,7 @@ namespace ServedService
                 return pooled;
             });
         }
-        
+
         internal void Start()
         {
             _bigBuffer = new BigBuffer(BufferSegmentSize, MaxBufferSegment);
@@ -194,7 +194,7 @@ namespace ServedService
                 default:
                     Console.WriteLine("unknow operation : " + args.LastOperation);
                     break;
-            }   
+            }
         }
 
         private void ProcessAccepted(SocketAsyncEventArgs args)
@@ -212,7 +212,7 @@ namespace ServedService
                 return;
             }
 
-            if(OnBytesReceived != null)
+            if (OnBytesReceived != null)
                 OnBytesReceived(args.AcceptSocket, new MemoryStream(args.Buffer, args.Segment.Offset, args.BytesTransferred));
 
             StartReceive(args.AcceptSocket, args);
@@ -221,7 +221,7 @@ namespace ServedService
         private void ProcessSent(SocketAsyncEventArgs args)
         {
             args.SetBuffer(null, 0, 0);
-            ((PooledObjectWrapper<SocketAsyncEventArgs>) args.UserToken).Dispose();
+            ((PooledObjectWrapper<SocketAsyncEventArgs>)args.UserToken).Dispose();
         }
 
         internal void Send(Socket socket, byte[] data)

@@ -33,5 +33,15 @@ namespace Calculator.Service
         { 
             return a + "-" + b  +"-" + c;
         }
+
+        public string Parameterless()
+        {
+            return "Bitch, i'm fabulous";
+        }
+
+        public int YoBoss(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j)
+        {
+            return a + b + c + d + e + f + g + h + i + j;
+        }
     }
 }
