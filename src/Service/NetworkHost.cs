@@ -6,12 +6,83 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Resources;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using CodeProject.ObjectPool;
 
 namespace ServedService.Service
 {
+    public sealed class NetworkParser : MemoryStream
+    {
+        public int Remaining
+        {
+            get { return _received - 4; }
+        }
+
+        public bool MessageAvailable
+        {
+            get
+            {
+                var received = false;
+                if (_splitted)
+                {
+                    received = _messageLength > -1 && Remaining >= _messageLength;
+                    if (received)
+                    {
+                        Position = sizeof(int);
+                        _splitted = false;
+                    }
+                }
+                else if(_messageLength == -1)
+                {
+                    Position = 0;
+                    ReadLength();
+                    received = _messageLength > -1 && Remaining >= _messageLength;
+                    if (!received)
+                    {
+                        Position = Remaining;
+                        _splitted = true;
+                    }
+                }
+                else
+                {
+                    _messageLength = -1;
+                    _received = 0;
+                }
+                return received;
+            } 
+        }
+
+        private int _received;
+        private int _messageLength;
+        private bool _splitted;
+
+        public NetworkParser()
+        {
+            _splitted = false;
+            _messageLength = -1;
+        }
+
+        public void Receive(Stream input)
+        {
+            if (_messageLength == -1)
+                Position = 0;
+            input.CopyTo(this);
+            _received += (int)input.Length;
+        }
+
+        private void ReadLength()
+        {
+            if (_messageLength != -1)
+                return;
+            if (Remaining < sizeof(int))
+                return;
+            var reader = new BinaryReader(this);
+            _messageLength = reader.ReadInt32();
+        }
+    }
+
     public sealed class BigBuffer : IDisposable
     {
         public byte[] Buffer { get; private set; }
@@ -21,7 +92,7 @@ namespace ServedService.Service
         {
             _segments = new ConcurrentStack<BufferSegment>();
             Buffer = new byte[segmentSize * segmentCount];
-            for (int i = 0; i < Buffer.Length; i += segmentSize)
+            for (var i = 0; i < Buffer.Length; i += segmentSize)
             {
                 _segments.Push(new BufferSegment(i, segmentSize));
             }
@@ -75,10 +146,11 @@ namespace ServedService.Service
 
         private BigBuffer _bigBuffer;
         private Socket _socket;
-        private string _host;
-        private int _port;
+        private readonly string _host;
+        private readonly int _port;
         private readonly int _backlog;
         private readonly ObjectPool<PooledObjectWrapper<SocketAsyncEventArgs>> _sendPool;
+        private readonly Dictionary<Socket, NetworkParser> _parserBySocket;
 
         public event BytesReceived OnBytesReceived;
 
@@ -87,6 +159,7 @@ namespace ServedService.Service
             _backlog = backlog;
             _host = host;
             _port = port;
+            _parserBySocket = new Dictionary<Socket, NetworkParser>();
             _sendPool = new ObjectPool<PooledObjectWrapper<SocketAsyncEventArgs>>(() =>
             {
                 var saea = new SocketAsyncEventArgs();
@@ -200,20 +273,31 @@ namespace ServedService.Service
         private void ProcessAccepted(SocketAsyncEventArgs args)
         {
             var accepted = args.AcceptSocket;
+
+            _parserBySocket[accepted] = new NetworkParser();
+
             StartAccept(args);
             StartReceive(accepted);
         }
 
         private void ProcessReceived(WrappedSocketEvent args)
         {
+            var parser = _parserBySocket[args.AcceptSocket];
+
             if (args.BytesTransferred == 0)
             {
+                parser.Dispose();
+                _parserBySocket.Remove(args.AcceptSocket);
                 DestroyEventArgs(args);
                 return;
             }
 
-            if (OnBytesReceived != null)
-                OnBytesReceived(args.AcceptSocket, new MemoryStream(args.Buffer, args.Segment.Offset, args.BytesTransferred));
+            parser.Receive(new MemoryStream(args.Buffer, args.Segment.Offset, args.BytesTransferred));
+            while (parser.MessageAvailable)
+            {
+                if (OnBytesReceived != null)
+                    OnBytesReceived(args.AcceptSocket, parser);
+            }
 
             StartReceive(args.AcceptSocket, args);
         }

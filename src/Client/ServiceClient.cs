@@ -89,18 +89,22 @@ namespace ServedService.Client
             {
                 using (var output = new BinaryWriter(burst))
                 {
+                    output.Write(0);
                     output.Write(nameSpace);
                     output.Write(method);
                     output.Write(serializedParams.ToArray());
+                    var messageLength = (int)burst.Length;
+                    burst.Position = 0;
+                    output.Write(messageLength - 4);
+                    burst.Position = messageLength;
                     stream.Write(burst.ToArray(), 0, (int)burst.Position);
-                    stream.Flush();
                 }
             }
             var bytes = _buffer.Buffer;
             var length = stream.Read(bytes, 0, bytes.Length) - 1;
             var success = bytes[0] == 1;
             if (!success)
-                throw new Exception(Encoding.Default.GetString(bytes, 1, length));
+                throw new Exception("Remote exception " + nameSpace + "." + method + " : " + Encoding.Default.GetString(bytes, 1, length));
             if (typeof(TOut) == typeof(PlaceHolderType))
                 return default(TOut);
             using (var input = new MemoryStream(bytes, 1, length))

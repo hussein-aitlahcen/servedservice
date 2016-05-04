@@ -13,17 +13,17 @@ namespace Calculator.Service
         {
             switch (request.Type)
             {
-                case OperationType.Add:
+                case OperationType.ADD:
                     return new OperationResult(request.A + request.B);
-                case OperationType.Sub:
+                case OperationType.SUB:
                     return new OperationResult(request.A - request.B);
-                case OperationType.Mul:
+                case OperationType.MUL:
                     return new OperationResult(request.A*request.B);
-                case OperationType.And:
+                case OperationType.AND:
                     return new OperationResult(request.A & request.B);
-                case OperationType.Or:
+                case OperationType.OR:
                     return new OperationResult(request.A | request.B);
-                case OperationType.Xor:
+                case OperationType.XOR:
                     return new OperationResult(request.A ^ request.B);
             }
             throw new InvalidOperationException("Unknow operation type " + request.Type);
@@ -42,6 +42,10 @@ namespace Calculator.Service
         public int YoBoss(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j)
         {
             return a + b + c + d + e + f + g + h + i + j;
+        }
+
+        public void Push(List<int> queue)
+        {
         }
     }
 }

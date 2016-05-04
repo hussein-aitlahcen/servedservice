@@ -22,28 +22,25 @@ namespace ServedService.Service
 
         private void ServeRequest(Socket socket, Stream input)
         {
-            using (var reader = new BinaryReader(input))
+            var reader = new BinaryReader(input);
+            var nameSpace = reader.ReadString();
+            var method = reader.ReadString();
+            using (var output = new MemoryStream())
             {
-                reader.BaseStream.Position = 0;
-                var nameSpace = reader.ReadString();
-                var method = reader.ReadString();
-                using (var output = new MemoryStream())
+                // success byte
+                output.Write(new byte[] { 1 }, 0, 1);
+                try
                 {
-                    // success byte
-                    output.Write(new byte[1] { 1 }, 0, 1);
-                    try
-                    {
-                        CallMethod(nameSpace, method, input, output);
-                    }
-                    catch (Exception e)
-                    {
-                        // sucess byte turned into failed one
-                        output.GetBuffer()[0] = 0;
-                        // transfert the error message
-                        output.Write(Encoding.Default.GetBytes(e.Message), 0, e.Message.Length);
-                    }
-                    _host.Send(socket, output.ToArray());
+                    CallMethod(nameSpace, method, input, output);
                 }
+                catch (Exception e)
+                {
+                    // sucess byte turned into failed one
+                    output.GetBuffer()[0] = 0;
+                    // transfert the error message
+                    output.Write(Encoding.Default.GetBytes(e.Message), 0, e.Message.Length);
+                }
+                _host.Send(socket, output.ToArray());
             }
         }
 
@@ -57,7 +54,7 @@ namespace ServedService.Service
         private void AddClass(string nameSpace, object instance)
         {
             if (_classByNamespace.ContainsKey(nameSpace))
-                throw new InvalidOperationException(string.Format("Namespace already used {0}, consider using an empty namespace", nameSpace));
+                throw new InvalidOperationException(string.Format("Namespace already used {0}, consider using another namespace", nameSpace));
             _classByNamespace.Add(nameSpace, new ClassProxy(instance));
         }
 

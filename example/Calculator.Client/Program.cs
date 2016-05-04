@@ -18,7 +18,7 @@ namespace Calculator.Client
             var service = new ServiceClient("127.0.0.1", 4444)
                 .GetService<ICalculator>("com.servedservice.calculator");
 
-            const int size = 100000;
+            const int size = 1000;
             var watch = Stopwatch.StartNew();
             var before = watch.ElapsedMilliseconds;
             for (var i = 0; i < size; i++)
@@ -27,7 +27,7 @@ namespace Calculator.Client
                     (
                         new OperationRequest
                             (
-                                OperationType.Mul,
+                                OperationType.MUL,
                                 i * 2,
                                 i * i
                             )

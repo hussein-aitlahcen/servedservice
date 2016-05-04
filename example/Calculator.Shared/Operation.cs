@@ -9,22 +9,19 @@ namespace Calculator.Shared
 {
     public enum OperationType
     {
-        Add,
-        Mul,
-        Sub,
-        Xor,
-        Or,
-        And
+        ADD,
+        MUL,
+        SUB,
+        XOR,
+        OR,
+        AND
     }
 
-    [ProtoContract]
+    [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
     public sealed class OperationRequest
     {
-        [ProtoMember(1)]
         public OperationType Type { get; set; }
-        [ProtoMember(2)]
         public int A { get; set; }
-        [ProtoMember(3)]
         public int B { get; set; }
 
         public OperationRequest() { }
@@ -37,10 +34,9 @@ namespace Calculator.Shared
         }
     }
 
-    [ProtoContract]
+    [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
     public sealed class OperationResult
     {
-        [ProtoMember(1)]
         public int Computed { get; set; }
 
         public OperationResult() { }

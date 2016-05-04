@@ -62,6 +62,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Client\ServiceClient.cs" />
+    <Compile Include="Service\CacheResultAttribute.cs" />
     <Compile Include="Service\ClassProxy.cs" />
     <Compile Include="FastActivator.cs" />
     <Compile Include="PlaceHolderType.cs" />
